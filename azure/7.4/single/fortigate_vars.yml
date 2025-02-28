@@ -1,0 +1,57 @@
+# variables
+#
+# hostname
+hostname: FGTVM-Single
+
+# Resource Group Name
+name : ansibleResourceGroup
+
+# VNET address cidr
+vnetcidr : "10.1.0.0/16"
+
+# public address cidr 
+publiccidr : "10.1.0.0/24"
+
+# private address cidr
+privatecidr : "10.1.1.0/24"
+
+# location
+location : "eastus"
+
+# instance size
+size : Standard_F4s
+
+# publisher
+publisher : "fortinet"
+
+# fgt offer
+offer : "fortinet_fortigate-vm_v5"
+
+# fgt sku
+fgtsku: 
+  byol : "fortinet_fg-vm"
+  payg : "fortinet_fg-vm_payg_2023"
+
+# fgt version
+version : "7.4.6"
+
+# Admin user name
+adminusername : "azureadmin"
+
+# Admin password
+adminpassword: "Fortinet123#"
+
+# license type, default is false.
+# If true, then need to set either the license_file or license_token parameter
+byol_type: false
+
+# license file
+# license file name, default is empty
+license_file: ""
+
+#license toke
+# license token string, default is empty
+license_token: ""
+
+# bootstrap template file
+bootstrap_template: "fortigate-bootstrap.txt.j2"
