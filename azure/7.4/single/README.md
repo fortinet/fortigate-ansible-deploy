@@ -16,7 +16,11 @@ Ansbile deploys the following components:
 ## Deployment
 To deploy the FortiGate-VM to Azure:
 1. Clone the repository.
-2. Customize variables in the `env.conf.example` and `fortigate_vars.yml` file as needed.
+2. Customize variables in the `env.conf.example` and `fortigate_vars.yml` file as needed. And rename `env.conf.example` to `env.conf`
+3. Export env.conf for ansible credentials
+   ```sh
+   $ source env.conf
+    ```
 3. Run the playbook:
    ```sh
    $ ansible-playbook main.yml
