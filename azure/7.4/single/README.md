@@ -21,12 +21,12 @@ To deploy the FortiGate-VM to Azure:
    ```sh
    $ source env.conf
     ```
-3. Run the playbook:
+4. Run the playbook:
    ```sh
    $ ansible-playbook main.yml
     ```
    ```
-4. Once finish running, it will have the following.
+5. Once finish running, it will have the following.
 
 Output will include the information necessary to log in to the FortiGate-VM instances:
 ```sh
