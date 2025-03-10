@@ -1,6 +1,6 @@
 # Ansible Deployment Scripts
 ## Introduction
-This project includes a set of terraform scripts for getting started with different cloud-providers with Fortinet.
+This project includes a set of ansible scripts for getting started with different cloud-providers with Fortinet.
 
 * [Azure](https://github.com/fortinet/fortigate-ansible-deploy/tree/main/azure)
 
