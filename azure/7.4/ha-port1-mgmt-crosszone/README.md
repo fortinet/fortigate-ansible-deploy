@@ -1,6 +1,5 @@
 # Deployment of a FortiGate-VM(BYOL/PAYG)  on the Azure in two different zones.
 ## Introduction
-## Introduction
 ## port1 - hamgmt
 ## port2 - public/untrust
 ## port3 - private/trust
