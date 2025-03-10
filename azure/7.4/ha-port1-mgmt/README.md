@@ -1,9 +1,9 @@
 # Deployment of a FortiGate-VM(BYOL/PAYG)  on the Azure
 ## Introduction
-## port1 - hamgmt
-## port2 - public/untrust
-## port3 - private/trust
-## port4 - hasync
+* port1 - hamgmt
+* port2 - public/untrust
+* port3 - private/trust
+* port4 - hasync
 An Ansible script to deploy a FortiGate-VM Cluster on Azure
 
 ## Requirements
