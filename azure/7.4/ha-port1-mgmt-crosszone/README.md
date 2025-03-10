@@ -10,7 +10,7 @@ An Ansible script to deploy a FortiGate-VM Cluster on Azure
 * [Ansible](https://docs.ansible.com/ansible/latest/getting_started/index.html) >= 2.17.9
 * jinja >= 3.1.5
 * azure.azcollection >= 2.7.0
-* Azure Service Principal authenication token(https://docs.fortinet.com/document/fortigate-public-cloud/7.6.0/azure-administration-guide/948968)
+* [Azure Service Principal authenication token](https://docs.fortinet.com/document/fortigate-public-cloud/7.6.0/azure-administration-guide/948968)
 
 ## Deployment overview
 Ansbile deploys the following components:
