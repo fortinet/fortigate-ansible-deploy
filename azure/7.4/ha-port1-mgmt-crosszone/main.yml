@@ -1,0 +1,366 @@
+- name: Create Azure VM
+  hosts: localhost
+  gather_facts: no
+  connection: local
+  vars_files:
+    - fortigate_vars.yml
+
+  tasks:
+  - name: Create resource group - "{{ name }}"
+    azure_rm_resourcegroup:
+      name: "{{ name }}"
+      location: "{{ location }}"
+  - name: Check if the license exists - license
+    stat: 
+      path: "{{ license_file }}"
+    register: register_license_file
+
+  - name: Check if the license exists - license 2
+    stat: 
+      path: "{{ license_file2 }}"
+    register: register_license_file2
+
+  - name: Create public IP address - ClusterPublicIP
+    azure_rm_publicipaddress:
+      resource_group: "{{ name }}"
+      allocation_method: Static
+      sku: "standard"
+      name: ClusterPublicIP
+    register: output_ClusterPublicIP
+
+  - name: Retrieve public IP Information - ClusterPublicIP
+    azure_rm_publicipaddress_info:
+      resource_group: "{{ name }}"
+      name: ClusterPublicIP
+    register: cluster_ip_info
+
+  - name: Create Route table 
+    azure_rm_routetable:
+      resource_group: "{{ name }}"
+      name: myRouteTable
+  - name: Create Internal Default Route
+    azure_rm_route:
+      resource_group: "{{ name }}"
+      name: default
+      address_prefix: 0.0.0.0/0
+      next_hop_type: virtual_appliance
+      next_hop_ip_address: "{{ activeport3 }}"
+      route_table_name: myRouteTable
+ 
+  - name: Read the license content from the license file -ActiveFGT
+    ansible.builtin.slurp:
+      path: "{{ license_file }}"
+    register: license_content_file
+    when: register_license_file.stat.exists 
+
+  - name: Read the license content from the license file -PassiveFGT
+    ansible.builtin.slurp:
+      path: "{{ license_file2 }}"
+    register: license_content_file2
+    when: register_license_file2.stat.exists 
+
+  - name: Decode the license content - ActiveFGT
+    set_fact:
+      license_content: "{{ license_content_file.content | b64decode | trim }}"
+    when: register_license_file.stat.exists
+
+  - name: Decode the license content - PassiveFGT
+    set_fact:
+      license_content2: "{{ license_content_file2.content | b64decode | trim }}"
+    when: register_license_file2.stat.exists
+
+  - name: Set the license mode base on the environment variable
+    set_fact:
+      license_mode: "{{ fgtsku.byol if byol_type else fgtsku.payg }}"
+
+  - name: Render the FortiGate bootstrap configuration - ActiveFortiGate 
+    ansible.builtin.template:
+      src: "{{ bootstrap_template }}"
+      dest: "fortigate-bootstrap.txt"
+    vars: 
+      fgthostname: "Azure-HA-Active"
+      license_content: "{{ license_file }}"
+      port1_ip: "{{ activeport1 }}"
+      port1_mask: "{{ activeport1mask }}"
+      port2_ip: "{{ activeport2 }}"
+      port2_mask: "{{ activeport2mask }}"
+      port3_ip: "{{ activeport3 }}"
+      port3_mask: "{{ activeport3mask }}"
+      port4_ip: "{{ activeport4 }}"
+      port4_mask: "{{ activeport4mask }}"
+      passive_peerip: "{{ passiveport4 }}"
+      mgmt_gateway_ip: "{{ port1gateway }}"
+      defaultgwy: "{{ port2gateway }}"
+      tenant: "{{ AZURE_TENANT }}"
+      subscription: "{{ AZURE_SUBSCRIPTION_ID }}"
+      clientid: "{{ AZURE_CLIENT_ID }}"
+      clientsecret: "{{ AZURE_SECRET }}"
+      rsg: "{{ name }}"
+      clusterip: "{{ cluster_ip_info.publicipaddresses[0].name }}"
+      routename: "myRouteTable"
+    when: license_content_file is defined
+
+  - name: Render the FortiGate bootstrap configuration - PassiveFortiGate 
+    ansible.builtin.template:
+      src: "{{ bootstrap_template2 }}"
+      dest: "fortigate-bootstrap2.txt"
+    vars: 
+      fgthostname: "Azure-HA-Passive"
+      license_content2: "{{ license_file2 }}"
+      port1_ip: "{{ passiveport1 }}"
+      port1_mask: "{{ passiveport1mask }}"
+      port2_ip: "{{ passiveport2 }}"
+      port2_mask: "{{ passiveport2mask }}"
+      port3_ip: "{{ passiveport3 }}"
+      port3_mask: "{{ passiveport3mask }}"
+      port4_ip: "{{ passiveport4 }}"
+      port4_mask: "{{ passiveport4mask }}"
+      passive_peerip: "{{ activeport4 }}"
+      mgmt_gateway_ip: "{{ port1gateway }}"
+      defaultgwy: "{{ port2gateway }}"
+      tenant: "{{ AZURE_TENANT }}"
+      subscription: "{{ AZURE_SUBSCRIPTION_ID }}"
+      clientid: "{{ AZURE_CLIENT_ID }}"
+      clientsecret: "{{ AZURE_SECRET }}"
+      rsg: "{{ name }}"
+      clusterip: "{{ cluster_ip_info.publicipaddresses[0].name }}"
+      routename: "myRouteTable"
+    when: license_content_file2 is defined
+
+  - name: Read the rendered bootstrap configuration - ActiveFortiGate
+    ansible.builtin.slurp:
+      path: "fortigate-bootstrap.txt"
+    register: bootstrap_config
+
+  - name: Read the rendered bootstrap configuration - PassiveFortiGate
+    ansible.builtin.slurp:
+      path: "fortigate-bootstrap2.txt"
+    register: bootstrap_config2
+
+  - name: Create resource group - "{{ name }}"
+    azure_rm_resourcegroup:
+      name: "{{ name }}"
+      location: "{{ location }}"
+  - name: Create virtual network
+    azure_rm_virtualnetwork:
+      resource_group: "{{ name }}"
+      name: fgtvnetwork
+      address_prefixes: "{{ vnetcidr }}"
+  - name: Add subnet - PublicSubnet
+    azure_rm_subnet:
+      resource_group: "{{ name }}"
+      name: PublicSubnet
+      address_prefix: "{{ publiccidr }}"
+      virtual_network: fgtvnetwork
+  - name: Add subnet - PrivateSubnet
+    azure_rm_subnet:
+      resource_group: "{{ name }}"
+      name: PrivateSubnet
+      address_prefix: "{{ privatecidr }}"
+      route_table: myRouteTable 
+      virtual_network: fgtvnetwork
+  - name: Add subnet - HaSyncSubnet
+    azure_rm_subnet:
+      resource_group: "{{ name }}"
+      name: HaSyncSubnet
+      address_prefix: "{{ hasynccidr }}"
+      virtual_network: fgtvnetwork
+  - name: Add subnet - HaMgmtSubnet
+    azure_rm_subnet:
+      resource_group: "{{ name }}"
+      name: HaMgmtSubnet
+      address_prefix: "{{ hamgmtcidr }}"
+      virtual_network: fgtvnetwork
+  - name: Create public IP address - ActiveMGMTIP
+    azure_rm_publicipaddress:
+      resource_group: "{{ name }}"
+      allocation_method: Static
+      name: ActiveMGMTIP
+      sku: "standard"
+      zones: "{{ zone1 }}"
+    register: output_ActiveMGMTIP
+  - name: Create public IP address - PassiveMGMTIP
+    azure_rm_publicipaddress:
+      resource_group: "{{ name }}"
+      allocation_method: Static
+      name: PassiveMGMTIP
+      sku: "standard"
+      zones: "{{ zone2 }}"
+    register: output_PassiveMGMTIP
+  - name: Create Network Security Group that allows all traffic
+    azure_rm_securitygroup:
+      resource_group: "{{ name }}"
+      name: myNetworkSecurityGroup
+      rules:
+        - name: All
+          protocol: "*"
+          destination_port_range: "*"
+          access: Allow
+          priority: 1001
+          direction: Inbound
+  - name: Create virtual network interface card - activeport1
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: activeport1
+      virtual_network: fgtvnetwork
+      subnet: HaMgmtSubnet
+      ip_configurations:
+        - name: ipconfig1
+          public_ip_address_name: ActiveMGMTIP
+          primary: true
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ activeport1 }}"
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - activeport2
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: activeport2
+      virtual_network: fgtvnetwork
+      subnet: PublicSubnet
+      ip_configurations:
+        - name: ipconfig1
+          public_ip_address_name: ClusterPublicIP
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ activeport2 }}"
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - activeport3
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: activeport3
+      virtual_network: fgtvnetwork
+      subnet: PrivateSubnet
+      ip_configurations:
+        - name: ipconfig1
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ activeport3 }}"
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - activeport4
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: activeport4
+      virtual_network: fgtvnetwork
+      subnet: HaSyncSubnet
+      ip_configurations:
+        - name: ipconfig1
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ activeport4 }}"
+      security_group: myNetworkSecurityGroup
+
+  - name: Create virtual network interface card - passiveport1
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: passiveport1
+      virtual_network: fgtvnetwork
+      subnet: HaMgmtSubnet
+      ip_configurations:
+        - name: ipconfig1
+          public_ip_address_name: PassiveMGMTIP
+          primary: true
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ passiveport1 }}"
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - passiveport2
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: passiveport2
+      virtual_network: fgtvnetwork
+      subnet: PublicSubnet
+      ip_configurations:
+        - name: ipconfig1
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ passiveport2 }}"
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - passiveport3
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: passiveport3
+      virtual_network: fgtvnetwork
+      subnet: PrivateSubnet
+      ip_configurations:
+        - name: ipconfig1
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ passiveport3 }}"
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - passiveport4
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: passiveport4
+      virtual_network: fgtvnetwork
+      subnet: HaSyncSubnet
+      ip_configurations:
+        - name: ipconfig1
+          private_ip_allocation_method: Static
+          private_ip_address: "{{ passiveport4 }}"
+      security_group: myNetworkSecurityGroup
+ 
+  - name: Create VM - ActiveFGTVM
+    azure_rm_virtualmachine:
+      accept_terms: true
+      resource_group: "{{ name }}"
+      name: ActiveFGTVM
+      custom_data: "{{ bootstrap_config.content | b64decode }}"
+      vm_size: "{{ size }}"
+      admin_username: "{{ adminusername }}"
+      admin_password: "{{ adminpassword }}"
+      ssh_password_enabled: true
+      network_interfaces: activeport1,activeport2,activeport3,activeport4
+      managed_disk_type: Premium_LRS
+      image:
+        offer: "{{ offer }}"
+        publisher: "{{ publisher }}"
+        sku: "{{ license_mode }}"
+        version: "{{ version }}"
+      plan:
+        name: "{{ license_mode }}"
+        product: "{{ offer }}"
+        publisher: "{{ publisher }}"
+      data_disks:
+        - lun: 0
+          disk_size_gb: 30
+          managed_disk_type: Premium_LRS
+      boot_diagnostics:
+        enabled: true
+        type: "managed"
+      zones: "{{ zone1 }}"
+    register: vm_result  
+
+  - name: Create VM - PassiveFGTVM
+    azure_rm_virtualmachine:
+      accept_terms: true
+      resource_group: "{{ name }}"
+      name: PassiveFGTVM
+      custom_data: "{{ bootstrap_config2.content | b64decode }}"
+      vm_size: "{{ size }}"
+      admin_username: "{{ adminusername }}"
+      admin_password: "{{ adminpassword }}"
+      ssh_password_enabled: true
+      network_interfaces: passiveport1,passiveport2,passiveport3,passiveport4
+      managed_disk_type: Premium_LRS
+      image:
+        offer: "{{ offer }}"
+        publisher: "{{ publisher }}"
+        sku: "{{ license_mode }}"
+        version: "{{ version }}"
+      plan:
+        name: "{{ license_mode }}"
+        product: "{{ offer }}"
+        publisher: "{{ publisher }}"
+      data_disks:
+        - lun: 0
+          disk_size_gb: 30
+          managed_disk_type: Premium_LRS
+      boot_diagnostics:
+        enabled: true
+        type: "managed"
+      zones: "{{ zone2 }}"
+    register: vm_result  
+
+  - name: Output the deployment information
+    debug:
+      msg: >-
+        The Cluter public IP address: {{ cluster_ip_info.publicipaddresses[0].ip_address }}
+        The Active  MGMT public IP address: {{ output_ActiveMGMTIP.state.ip_address }}
+        The Passive  MGMT public IP address: {{ output_PassiveMGMTIP.state.ip_address }}
+        Resource group : {{ name }}
+        Username: {{ adminusername }}
+        Password: {{ adminpassword }} 

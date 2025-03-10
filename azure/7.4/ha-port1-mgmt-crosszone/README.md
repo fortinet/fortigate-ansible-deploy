@@ -1,4 +1,4 @@
-# Deployment of a FortiGate-VM(BYOL/PAYG)  on the Azure
+# Deployment of a FortiGate-VM(BYOL/PAYG)  on the Azure in two different zones.
 ## Introduction
 ## Introduction
 ## port1 - hamgmt
