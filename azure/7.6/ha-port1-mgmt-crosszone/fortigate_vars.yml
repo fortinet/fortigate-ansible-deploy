@@ -1,0 +1,131 @@
+# variables
+#
+# Azure Service Principal for SDN Connector
+AZURE_SUBSCRIPTION_ID: <fill your own subscription id>
+AZURE_CLIENT_ID: <fill your own client id>
+AZURE_SECRET: <fill your own client secret>
+AZURE_TENANT: <fill your own tenant id>
+
+# Resource Group Name
+name : ansibleResourceGroup
+
+# Active FGT zone
+zone1 : "1"
+
+# Passive FGT zone
+zone2 : "2"
+
+# VNET address cidr
+vnetcidr : "172.1.0.0/16"
+
+# public address cidr 
+publiccidr : "172.1.0.0/24"
+
+# private address cidr
+privatecidr : "172.1.1.0/24"
+
+# hasync address cidr
+hasynccidr : "172.1.2.0/24"
+
+# hamgmt address cidr
+hamgmtcidr : "172.1.3.0/24"
+
+# active port1 address
+activeport1 : "172.1.3.10"
+
+# active port1 mask
+activeport1mask : "255.255.255.0"
+
+# active port2 address
+activeport2 : "172.1.0.10"
+
+# active port2 mask
+activeport2mask : "255.255.255.0"
+
+# active port3 address
+activeport3 : "172.1.1.10"
+
+# active port3 mask
+activeport3mask : "255.255.255.0"
+
+# active port4 address
+activeport4 : "172.1.2.10"
+
+# active port4 mask
+activeport4mask : "255.255.255.0"
+
+
+# passive port1 address
+passiveport1 : "172.1.3.11"
+
+# passive port1 mask
+passiveport1mask : "255.255.255.0"
+
+# passive port2 address
+passiveport2 : "172.1.0.11"  
+
+# passive port2 mask
+passiveport2mask : "255.255.255.0"
+
+# passive port3 address
+passiveport3 : "172.1.1.11"
+
+# passive port3 mask
+passiveport3mask : "255.255.255.0"
+
+
+# passive port4 address
+passiveport4 : "172.1.2.11"
+
+# passive port4 mask
+passiveport4mask : "255.255.255.0"
+
+# port1 gateway
+port1gateway : "172.1.3.1"
+
+# port2 gateway
+port2gateway : "172.1.0.1"
+
+# location
+location : "eastus"
+
+# instance size
+size : Standard_F4s
+
+# publisher
+publisher : "fortinet"
+
+# fgt offer
+offer : "fortinet_fortigate-vm_v5"
+
+# fgt sku
+fgtsku:
+  byol : "fortinet_fg-vm_g2"
+  payg : "fortinet_fg-vm_payg_2023_g2"
+
+# fgt version
+version : "7.6.2"
+
+# Admin user name
+adminusername : "azureadmin"
+
+# Admin password
+adminpassword: "Fortinet123#"
+
+# license type, default is false.
+# If true, then need to set the license_file
+byol_type: false
+
+# license file for active unit
+# license file name, default is empty
+license_file: ""
+
+# license file for passive unit
+# license file name, default is empty
+license_file2: ""
+
+# bootstrap template file
+bootstrap_template: "fortigate-bootstrap.txt.j2"
+
+# bootstrap template file for secondary fortigate
+bootstrap_template2: "fortigate-bootstrap2.txt.j2"

@@ -1,0 +1,137 @@
+- name: Create Azure VM
+  hosts: localhost
+  gather_facts: no
+  connection: local
+  vars_files:
+    - fortigate_vars.yml
+
+  tasks:
+  - name: Read the rendere bootstrap configuration
+    ansible.builtin.slurp:
+      path: "fortigate-bootstrap.txt"
+    register: bootstrap_config
+
+  - name: Check if the license exists
+    stat: 
+      path: "{{ license_file }}"
+    register: register_license_file
+
+  - name: Read the license content from the license file
+    ansible.builtin.slurp:
+      path: "{{ license_file }}"
+    register: license_content_file
+    when: register_license_file.stat.exists 
+
+  - name: Decode the license content
+    set_fact:
+      license_content: "{{ license_content_file.content | b64decode | trim }}"
+    when: register_license_file.stat.exists
+
+  - name: Set the license mode base on the environment variable
+    set_fact:
+      license_mode: "{{ fgtsku.byol if byol_type else fgtsku.payg }}"
+
+
+  - name: Render the FortiGate bootstrap configuration 
+    ansible.builtin.template:
+      src: "{{ bootstrap_template }}"
+      dest: "fortigate-bootstrap.txt"
+    vars: 
+      fgthostname: "{{ hostname }}"
+      license_content: "{{ license_file }}"
+    when: license_content_file is defined
+
+  - name: Create resource group - "{{ name }}"
+    azure_rm_resourcegroup:
+      name: "{{ name }}"
+      location: "{{ location }}"
+  - name: Create virtual network
+    azure_rm_virtualnetwork:
+      resource_group: "{{ name }}"
+      name: myVnet
+      address_prefixes: "{{ vnetcidr }}"
+  - name: Add subnet - PublicSubnet
+    azure_rm_subnet:
+      resource_group: "{{ name }}"
+      name: PublicSubnet
+      address_prefix: "{{ publiccidr }}"
+      virtual_network: myVnet
+  - name: Add subnet - PrivateSubnet
+    azure_rm_subnet:
+      resource_group: "{{ name }}"
+      name: PrivateSubnet
+      address_prefix: "{{ privatecidr }}"
+      virtual_network: myVnet
+  - name: Create public IP address
+    azure_rm_publicipaddress:
+      resource_group: "{{ name }}"
+      allocation_method: Static
+      name: myPublicIP
+    register: output_ip_address
+  - name: Create Network Security Group that allows SSH
+    azure_rm_securitygroup:
+      resource_group: "{{ name }}"
+      name: myNetworkSecurityGroup
+      rules:
+        - name: All
+          protocol: "*"
+          destination_port_range: "*"
+          access: Allow
+          priority: 1001
+          direction: Inbound
+  - name: Create virtual network interface card - fgtnic1
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: fgtnic1
+      virtual_network: myVnet
+      subnet: PublicSubnet
+      ip_configurations:
+        - name: ipconfig1
+          public_ip_address_name: myPublicIP
+          primary: true
+      security_group: myNetworkSecurityGroup
+  - name: Create virtual network interface card - fgtnic2
+    azure_rm_networkinterface:
+      resource_group: "{{ name }}"
+      name: fgtnic2
+      virtual_network: myVnet
+      subnet: PrivateSubnet
+      ip_configurations:
+        - name: ipconfig1
+      security_group: myNetworkSecurityGroup
+  - name: Create VM
+    azure_rm_virtualmachine:
+      accept_terms: true
+      resource_group: "{{ name }}"
+      name: myFGTVM
+      custom_data: "{{ bootstrap_config.content | b64decode }}"
+      vm_size: "{{ size }}"
+      admin_username: "{{ adminusername }}"
+      admin_password: "{{ adminpassword }}"
+      ssh_password_enabled: true
+      network_interfaces: fgtnic1,fgtnic2
+      managed_disk_type: Premium_LRS
+      image:
+        offer: "{{ offer }}"
+        publisher: "{{ publisher }}"
+        sku: "{{ license_mode }}"
+        version: "{{ version }}"
+      plan:
+        name: "{{ license_mode }}"
+        product: "{{ offer }}"
+        publisher: "{{ publisher }}"
+      data_disks:
+        - lun: 0
+          disk_size_gb: 30
+          managed_disk_type: Premium_LRS
+      boot_diagnostics:
+        enabled: true
+        type: "managed"
+    register: vm_result  
+  - name: Output the deployment information
+    debug:
+      msg: >-
+        The public IP address: {{ output_ip_address.state.ip_address }}
+        Resource group : {{ name }}
+        Username: {{ adminusername }}
+        Password: {{ adminpassword }} 
