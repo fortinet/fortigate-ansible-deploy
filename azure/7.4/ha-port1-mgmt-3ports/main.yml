@@ -24,7 +24,6 @@
     azure_rm_publicipaddress:
       resource_group: "{{ name }}"
       allocation_method: Static
-      sku: "standard"
       name: ClusterPublicIP
     register: output_ClusterPublicIP
 
@@ -86,9 +85,7 @@
       port2_mask: "{{ activeport2mask }}"
       port3_ip: "{{ activeport3 }}"
       port3_mask: "{{ activeport3mask }}"
-      port4_ip: "{{ activeport4 }}"
-      port4_mask: "{{ activeport4mask }}"
-      passive_peerip: "{{ passiveport4 }}"
+      passive_peerip: "{{ passiveport1 }}"
       mgmt_gateway_ip: "{{ port1gateway }}"
       defaultgwy: "{{ port2gateway }}"
       tenant: "{{ AZURE_TENANT }}"
@@ -113,9 +110,7 @@
       port2_mask: "{{ passiveport2mask }}"
       port3_ip: "{{ passiveport3 }}"
       port3_mask: "{{ passiveport3mask }}"
-      port4_ip: "{{ passiveport4 }}"
-      port4_mask: "{{ passiveport4mask }}"
-      passive_peerip: "{{ activeport4 }}"
+      passive_peerip: "{{ activeport1 }}"
       mgmt_gateway_ip: "{{ port1gateway }}"
       defaultgwy: "{{ port2gateway }}"
       tenant: "{{ AZURE_TENANT }}"
@@ -159,13 +154,7 @@
       address_prefix: "{{ privatecidr }}"
       route_table: myRouteTable 
       virtual_network: fgtvnetwork
-  - name: Add subnet - HaSyncSubnet
-    azure_rm_subnet:
-      resource_group: "{{ name }}"
-      name: HaSyncSubnet
-      address_prefix: "{{ hasynccidr }}"
-      virtual_network: fgtvnetwork
-  - name: Add subnet - HaMgmtSubnet
+  - name: Add subnet - HaMgmtSubnet-HaSyncSubnet
     azure_rm_subnet:
       resource_group: "{{ name }}"
       name: HaMgmtSubnet
@@ -176,28 +165,30 @@
       resource_group: "{{ name }}"
       allocation_method: Static
       name: ActiveMGMTIP
-      sku: "standard"
-      zones: "{{ zone1 }}"
     register: output_ActiveMGMTIP
   - name: Create public IP address - PassiveMGMTIP
     azure_rm_publicipaddress:
       resource_group: "{{ name }}"
       allocation_method: Static
       name: PassiveMGMTIP
-      sku: "standard"
-      zones: "{{ zone2 }}"
     register: output_PassiveMGMTIP
   - name: Create Network Security Group that allows all traffic
     azure_rm_securitygroup:
       resource_group: "{{ name }}"
       name: myNetworkSecurityGroup
       rules:
-        - name: All
+        - name: allow-inbound
           protocol: "*"
           destination_port_range: "*"
           access: Allow
           priority: 1001
           direction: Inbound
+        - name: allow-outbound
+          protocol: "*"
+          destination_port_range: "*"
+          access: Allow
+          priority: 1002
+          direction: Outbound
   - name: Create virtual network interface card - activeport1
     azure_rm_networkinterface:
       resource_group: "{{ name }}"
@@ -234,18 +225,6 @@
           private_ip_allocation_method: Static
           private_ip_address: "{{ activeport3 }}"
       security_group: myNetworkSecurityGroup
-  - name: Create virtual network interface card - activeport4
-    azure_rm_networkinterface:
-      resource_group: "{{ name }}"
-      name: activeport4
-      virtual_network: fgtvnetwork
-      subnet: HaSyncSubnet
-      ip_configurations:
-        - name: ipconfig1
-          private_ip_allocation_method: Static
-          private_ip_address: "{{ activeport4 }}"
-      security_group: myNetworkSecurityGroup
-
   - name: Create virtual network interface card - passiveport1
     azure_rm_networkinterface:
       resource_group: "{{ name }}"
@@ -281,18 +260,7 @@
           private_ip_allocation_method: Static
           private_ip_address: "{{ passiveport3 }}"
       security_group: myNetworkSecurityGroup
-  - name: Create virtual network interface card - passiveport4
-    azure_rm_networkinterface:
-      resource_group: "{{ name }}"
-      name: passiveport4
-      virtual_network: fgtvnetwork
-      subnet: HaSyncSubnet
-      ip_configurations:
-        - name: ipconfig1
-          private_ip_allocation_method: Static
-          private_ip_address: "{{ passiveport4 }}"
-      security_group: myNetworkSecurityGroup
- 
+
   - name: Create VM - ActiveFGTVM
     azure_rm_virtualmachine:
       accept_terms: true
@@ -303,7 +271,7 @@
       admin_username: "{{ adminusername }}"
       admin_password: "{{ adminpassword }}"
       ssh_password_enabled: true
-      network_interfaces: activeport1,activeport2,activeport3,activeport4
+      network_interfaces: activeport1,activeport2,activeport3
       managed_disk_type: Premium_LRS
       image:
         offer: "{{ offer }}"
@@ -321,7 +289,6 @@
       boot_diagnostics:
         enabled: true
         type: "managed"
-      zones: "{{ zone1 }}"
     register: vm_result  
 
   - name: Create VM - PassiveFGTVM
@@ -334,7 +301,7 @@
       admin_username: "{{ adminusername }}"
       admin_password: "{{ adminpassword }}"
       ssh_password_enabled: true
-      network_interfaces: passiveport1,passiveport2,passiveport3,passiveport4
+      network_interfaces: passiveport1,passiveport2,passiveport3
       managed_disk_type: Premium_LRS
       image:
         offer: "{{ offer }}"
@@ -352,7 +319,6 @@
       boot_diagnostics:
         enabled: true
         type: "managed"
-      zones: "{{ zone2 }}"
     register: vm_result  
 
   - name: Output the deployment information

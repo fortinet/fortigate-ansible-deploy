@@ -350,10 +350,10 @@
 
   - name: Output the deployment information
     debug:
-      msg: >-
-        The Cluter public IP address: {{ cluster_ip_info.publicipaddresses[0].ip_address }}
-        The Active  MGMT public IP address: {{ output_ActiveMGMTIP.state.ip_address }}
-        The Passive  MGMT public IP address: {{ output_PassiveMGMTIP.state.ip_address }}
-        Resource group : {{ name }}
-        Username: {{ adminusername }}
-        Password: {{ adminpassword }} 
+      msg: 
+        - 'The Cluter public IP address: {{ cluster_ip_info.publicipaddresses[0].ip_address }}'
+        - 'The Active  MGMT public IP address: {{ output_ActiveMGMTIP.state.ip_address }}'
+        - 'The Passive  MGMT public IP address: {{ output_PassiveMGMTIP.state.ip_address }}'
+        - 'Resource group : {{ name }}'
+        - 'Username: {{ adminusername }}'
+        - 'Password: {{ adminpassword }}'
