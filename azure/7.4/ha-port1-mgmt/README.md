@@ -33,7 +33,14 @@ To deploy the FortiGate-VM to Azure:
 5. Once finish running, it will have the following.
 Output will include the information necessary to log in to the FortiGate-VM instances:
 ```sh
-"msg": "The Cluter public IP address: <FGT Cluster IP> The Active  MGMT public IP address: <Active FGT MGMT Public IP>  The Passive  MGMT public IP address: <Passive FGT MGMT Public IP> Resource group : <Resource Group name> Username: <FGT Username> Password: <FGT Password "
+"msg": [
+        "The Cluter public IP address: <FGT Cluster IP>",
+        "The Active  MGMT public IP address: <Active FGT MGMT Public IP>",
+        "The Passive  MGMT public IP address: <Passive FGT MGMT Public IP>",
+        "Resource group : <Resource Group Name>",
+        "Username: <FGT Admin Username>",
+        "Password: <FGT Admin Password>"
+    ]
 ```
 
 ## Destroy the instance
