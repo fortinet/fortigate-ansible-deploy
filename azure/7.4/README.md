@@ -5,6 +5,7 @@ This sections includes different set of ansible scripts for different deployment
 * [Single FortiGateVM](https://github.com/fortinet/fortigate-ansible-deploy/tree/main/azure/7.4/single) : This deploys a single FortiGate-VM.
 * [HA FortiGateVM](https://github.com/fortinet/fortigate-ansible-deploy/tree/main/azure/7.4/ha-port1-mgmt) : This deploys a FortiGate-VM Cluser in A-P mode.
 * [HA FortiGateVM-Zones](https://github.com/fortinet/fortigate-ansible-deploy/tree/main/azure/7.4/ha-port1-mgmt-crosszone) : This deploys a FortiGate-VM Cluser in A-P mode in different zones.
+* [HA FortiGateVM-3ports](https://github.com/fortinet/fortigate-ansible-deploy/tree/main/azure/7.4/ha-port1-mgmt-3ports) : This deploys a FortiGate-VM Cluser in A-P mode in 3 ports
 
 ## Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
