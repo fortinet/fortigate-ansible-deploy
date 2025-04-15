@@ -1,0 +1,177 @@
+- name: Create an EC2 Instance FGT VM
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+        - fortigate_vars.yml
+
+  tasks:
+    - name: Check if the license exists
+      stat:
+        path: "{{ license_file }}"
+      register: register_license_file
+
+    - name: Read the license content from the license file
+      ansible.builtin.slurp:
+        path: "{{ license_file }}"
+      register: license_content_file
+      when: register_license_file.stat.exists
+
+    - name: Decode the license content
+      set_fact:
+        license_content: "{{ license_content_file.content | b64decode | trim }}"
+      when: register_license_file.stat.exists
+
+    - name: Render the FortiGate bootstrap configuration
+      ansible.builtin.template:
+        src: "{{ bootstrap_template }}"
+        dest: "fortigate-bootstrap.txt"
+      vars:
+        fgthostname: "{{ fortigate_name }}"
+        license_content: "{{ license_file }}"
+        license: "{{ license_type }}"
+      when: license_content_file is defined
+
+    - name: Read the rendered bootstrap configuration
+      ansible.builtin.slurp:
+       path: "fortigate-bootstrap.txt"
+      register: bootstrap_config
+
+    - name: Create a new VPC 
+      amazon.aws.ec2_vpc_net:
+        name: "{{ vpc_name }}"
+        cidr_block: "{{ cidr_block }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+      register: vpc
+
+    - name: Create VPC gateway
+      amazon.aws.ec2_vpc_igw:
+        region: "{{ region }}"
+        vpc_id: "{{ vpc.vpc.id }}"
+      register: vpc_igw
+
+    - name: Create a new Subnet-Public
+      amazon.aws.ec2_vpc_subnet:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        cidr: "{{ public_cidr }}"
+        region: "{{ region }}"
+        vpc_id: "{{ vpc.vpc.id }}"
+      register: public_subnet
+
+    - name: Create a new Subnet-Private
+      amazon.aws.ec2_vpc_subnet:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        cidr: "{{ private_cidr }}"
+        region: "{{ region }}"
+        vpc_id: "{{ vpc.vpc.id }}"
+      register: private_subnet
+
+
+    - name: Set up public subnet route table
+      amazon.aws.ec2_vpc_route_table:
+        vpc_id:  "{{ vpc.vpc.id }}"
+        region: "{{ region }}"
+        tags:
+          Name: "{{ route_name }}"
+        subnets:
+          - "{{ public_subnet.subnet.id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ vpc_igw.gateway_id }}"
+          - dest: ::/0
+            gateway_id: "{{ vpc_igw.gateway_id }}"
+      register: public_route_table
+
+    - name: Create a Security Group  
+      amazon.aws.ec2_security_group:
+        name: "Ansible-Test-Security-Group"
+        description: "Ansible-Testing"
+#        aws_access_key: "{{ aws_access_key }}"
+#        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ region }}"
+        rules:
+          - proto: tcp
+            ports:
+            - 443
+            cidr_ip: 0.0.0.0/0
+            rule_desc: "allow all on port 80"
+          - proto: tcp
+            ports:
+            - 22
+            cidr_ip: 0.0.0.0/0
+            rule_desc: "allow all on port 22"
+      register: security_group
+
+    - name: Create a Security Group - Internal 
+      amazon.aws.ec2_security_group:
+        name: "Ansible-Test-Security-Group-Internal"
+        description: "Ansible-Testing"
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ region }}"
+        rules:
+          - proto: all
+            ports:
+            - 1-65535
+            cidr_ip: 0.0.0.0/0
+            rule_desc: "allow all"
+      register: security_group_internal
+
+
+    - name: Create ENI - Public
+      amazon.aws.ec2_eni:
+          subnet_id: "{{ public_subnet.subnet.id }}"
+          description: "public interface"
+          private_ip_address: "{{ public_ip }}"
+          security_groups:
+            - "{{ security_group.group_id}}"
+          region: "{{ region }}"
+          state: present
+          delete_on_termination: true
+      register: public_eni
+
+    - name: Create ENI - Private
+      amazon.aws.ec2_eni:
+          subnet_id: "{{ private_subnet.subnet.id }}"
+          description: "private interface"
+          private_ip_address: "{{ private_ip }}"
+          security_groups:
+            - "{{ security_group_internal.group_id}}"
+          region: "{{ region }}"
+          region: "{{ region }}"
+          state: present
+          delete_on_termination: true
+      register: private_eni
+
+    - name: Launch an EC2 Instance
+      amazon.aws.ec2_instance:
+        name: "{{ fortigate_name }}"
+        key_name: "{{ key_name }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        instance_type: "{{ instance_type }}"
+        count: 1
+        wait: yes
+        aws_region: "{{ region }}"
+        network_interfaces_ids:
+          - id : "{{ public_eni.interface.id  }}"
+            device_index: 0
+          - id : "{{ private_eni.interface.id }}" 
+            device_index: 1
+        vpc_subnet_id: "{{ public_subnet.subnet.id }}"
+        image_id: '{{ ami_data[region][arch][license_type] }}'
+        user_data : "{{ bootstrap_config.content | b64decode }}"
+      register: fgt
+
+    - name: associate an elastic IP with an instance
+      amazon.aws.ec2_eip:
+        region: "{{ region }}"
+        state: present
+        release_on_disassociation: true
+        in_vpc: true
+        device_id: "{{ public_eni.interface.id }}"
+        private_ip_address: "{{ public_ip }}"
+      register: public_ip
