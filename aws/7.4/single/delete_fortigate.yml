@@ -1,0 +1,109 @@
+- name: Create an EC2 Instance FGT VM
+  hosts: localhost
+  vars_files:
+    - fortigate_vars.yml
+
+  tasks:
+    - name: Delete EC2 instance
+      amazon.aws.ec2_instance:
+        region: "{{ region }}"
+        state: absent
+        filters:
+         instance-state-name: running
+         "tag:Name": "{{ fortigate_name }}"
+           
+    - name: Grab VPC details
+      amazon.aws.ec2_vpc_net_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "{{ vpc_name }}"
+      register: all_vpcs
+
+    - name: Delete Route Table
+      community.aws.ec2_vpc_route_table:
+        region: "{{ region }}"
+        vpc_id: "{{ all_vpcs.vpcs[0].vpc_id }}"
+        tags:
+          Name: "{{ route_name }}"
+        state: absent
+          
+    - name: gather eni infos public
+      ec2_eni_info: 
+        region: "{{ region }}"
+        filters:
+          description: "public interface"
+          private-ip-address: "{{ public_ip }}"
+      register: public_eni
+
+    - name: diassociate EIP from public
+      amazon.aws.ec2_eip:
+        device_id: "{{ public_eni.network_interfaces[0].network_interface_id }}"
+        region: "{{ region }}"
+        in_vpc: true
+        release_on_disassociation: true
+        state: absent
+
+    - name: gather eni infos private
+      ec2_eni_info: 
+        region: "{{ region }}"
+        filters:
+          description: "private interface"
+          private-ip-address: "{{ private_ip }}"
+      register: private_eni
+
+    - name: Delete ENI - public
+      amazon.aws.ec2_eni:
+        region: "{{ region }}"
+        eni_id: "{{ public_eni.network_interfaces[0].network_interface_id }}"
+        state: absent
+      when: public_eni.network_interfaces
+
+    - name: Delete ENI - private
+      amazon.aws.ec2_eni:
+        region: "{{ region }}"
+        eni_id: "{{ private_eni.network_interfaces[0].network_interface_id }}"
+        state: absent
+      when: private_eni.network_interfaces
+
+    - name: Delete internet gateway in VPC
+      community.aws.ec2_vpc_igw:
+        region: "{{ region }}"
+        vpc_id: "{{ item.vpc_id }}"
+        state: absent
+      loop: '{{ all_vpcs.vpcs }}'
+
+    - name: Delete Subnet
+      amazon.aws.ec2_vpc_subnet:
+        region: "{{ region }}"
+        vpc_id: "{{ all_vpcs.vpcs[0].vpc_id }}"
+        cidr: "{{ public_cidr }}"
+        state: absent
+
+    - name: Delete Subnet
+      amazon.aws.ec2_vpc_subnet:
+        region: "{{ region }}"
+        vpc_id: "{{ all_vpcs.vpcs[0].vpc_id }}"
+        cidr: "{{ private_cidr }}"
+        state: absent
+
+    - name: Gather information about all Security Groups in Environment {{ ec2_environment }}
+      amazon.aws.ec2_group_info:
+        region: "{{ region }}"
+        filters:
+          vpc-id: "{{ all_vpcs.vpcs[0].vpc_id }}"
+      register: all_sg
+
+    - name: Delete Security Groups in VPC
+      amazon.aws.ec2_group:
+        region: "{{ region }}"
+        group_id: "{{ item.group_id }}"
+        state: absent
+      loop: "{{ all_sg.security_groups }}"
+      when: item.group_name != "default"
+
+    - name: Delete VPC
+      amazon.aws.ec2_vpc_net:
+        name: "{{ vpc_name }}"
+        region: "{{ region }}"
+        cidr_block: "{{ cidr_block }}"
+        state: absent
