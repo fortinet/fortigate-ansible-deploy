@@ -292,7 +292,7 @@ ami_data:
         "byol": "ami-00877b308cea2c071"
       }
     },
-    "il-south-1": {
+    "il-central-1": {
       "arm" : {
         "payg": "ami-04b1aed861d0b8b0e",
         "byol": "ami-0b52ac19bfc383dd3"
